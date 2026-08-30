@@ -1,0 +1,52 @@
+{
+  "name": "Bipa — lista de supermercado",
+  "short_name": "Bipa",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F5F4F1",
+  "theme_color": "#DC4B16",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "description": "Monte a lista, bipe os produtos no mercado e acompanhe o total da compra em tempo real. Funciona sem internet.",
+  "categories": ["shopping", "productivity", "food"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "icons/Icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/Icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/Icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/Icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Modo Compra",
+      "short_name": "Comprar",
+      "description": "Abrir a compra em andamento",
+      "url": "./#/inicio"
+    },
+    {
+      "name": "Nova lista",
+      "short_name": "Nova lista",
+      "url": "./#/nova-lista"
+    }
+  ]
+}

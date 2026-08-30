@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  // O seed roda por ts-node, não é compilado. Deixá-lo fora mantém a saída
+  // em dist/main.js em vez de dist/src/main.js.
+  "exclude": ["node_modules", "test", "dist", "prisma", "**/*spec.ts"]
+}

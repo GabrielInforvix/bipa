@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="Lista de supermercado com leitura de código de barras. O total da compra sempre visível.">
+
+  <title>Bipa</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <!-- Aparência de aplicativo quando instalado na tela inicial. -->
+  <meta name="theme-color" content="#DC4B16">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Bipa">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overscroll-behavior: none;
+      background: #F5F4F1;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Tela de abertura enquanto o Flutter carrega. O bundle inicial do
+       Flutter Web é pesado, então mostrar a marca de imediato evita a
+       impressão de app travado no primeiro toque. */
+    #abertura {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 22px;
+      background: #F5F4F1;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      transition: opacity .25s ease;
+      z-index: 10;
+    }
+    #abertura.saindo { opacity: 0; pointer-events: none; }
+    .marca {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      background: #DC4B16;
+      color: #fff;
+      padding: 11px 19px;
+      border-radius: 14px;
+      font-size: 25px;
+      font-weight: 700;
+      letter-spacing: -.4px;
+    }
+    .barras { display: flex; gap: 2.5px; align-items: center; height: 22px; }
+    .barras i { display: block; width: 2.5px; height: 100%; background: #fff; border-radius: 1px; }
+    .barras i:nth-child(2) { width: 1.5px; height: 78%; }
+    .barras i:nth-child(4) { width: 4px; }
+    .barras i:nth-child(5) { width: 1.5px; height: 78%; }
+    .carregando {
+      width: 34px; height: 34px;
+      border: 3px solid #E1DED8;
+      border-top-color: #DC4B16;
+      border-radius: 50%;
+      animation: girar .8s linear infinite;
+    }
+    @keyframes girar { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .carregando { animation-duration: 2.4s; }
+    }
+    .aviso {
+      font-size: 13px;
+      color: #8A8D93;
+      max-width: 280px;
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div id="abertura">
+    <div class="marca">
+      <span class="barras"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      Bipa
+    </div>
+    <div class="carregando"></div>
+    <p class="aviso">Carregando sua lista…</p>
+  </div>
+
+  <script>
+    // Some com a abertura assim que o Flutter desenha o primeiro quadro.
+    window.addEventListener('flutter-first-frame', function () {
+      var abertura = document.getElementById('abertura');
+      if (!abertura) return;
+      abertura.classList.add('saindo');
+      setTimeout(function () { abertura.remove(); }, 260);
+    });
+  </script>
+
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

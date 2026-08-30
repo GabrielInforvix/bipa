@@ -1,0 +1,29 @@
+# Node
+node_modules/
+dist/
+
+# Segredos — nunca versionar
+api/.env
+*.env.local
+
+# Flutter
+web/.dart_tool/
+web/build/
+web/.flutter-plugins
+web/.flutter-plugins-dependencies
+web/.packages
+
+# Build de producao
+deploy/
+
+# Sistema
+*.log
+Thumbs.db
+.DS_Store
+
+# Android
+web/android/.gradle/
+web/android/app/build/
+web/android/local.properties
+web/.gradle/
+*.apk

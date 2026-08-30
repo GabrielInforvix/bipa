@@ -1,0 +1,294 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// IDs são UUID v7 gerados NO CLIENTE (não autoincrement). Isso é obrigatório
+// no modelo offline-first: o app cria listas e itens sem conexão e o id já
+// nasce definitivo, então a sincronização nunca precisa remapear chave nem
+// corre risco de duplicar registro no reenvio.
+
+enum PerfilUsuario {
+  ADMIN
+  COMUM
+}
+
+/// Como o produto é vendido. PESO cobre açougue, hortifrúti, frios e padaria,
+/// onde a etiqueta da balança traz peso/preço e a quantidade é fracionada.
+enum TipoVenda {
+  UNIDADE
+  PESO
+}
+
+enum StatusLista {
+  RASCUNHO
+  EM_COMPRA
+  FINALIZADA
+}
+
+/// De onde veio o cadastro do produto — usado para priorizar a cascata de
+/// busca e para medir a cobertura do catálogo colaborativo.
+enum OrigemProduto {
+  CATALOGO
+  OPEN_FOOD_FACTS
+  MANUAL
+  BALANCA
+}
+
+/// Regra 12: produtos não planejados aparecem separados no resumo da compra.
+enum OrigemItem {
+  PLANEJADO
+  EXTRA
+}
+
+// ── Conta / autenticação ─────────────────────────────────────────────
+
+model Usuario {
+  id           String        @id @db.Uuid
+  nome         String
+  email        String        @unique
+  senhaHash    String        @map("senha_hash")
+  perfil       PerfilUsuario @default(COMUM)
+  ativo        Boolean       @default(true)
+  criadoEm     DateTime      @default(now()) @map("criado_em")
+  atualizadoEm DateTime      @updatedAt @map("atualizado_em")
+
+  tokensAtualizacao TokenAtualizacao[]
+  categorias        Categoria[]
+  mercados          Mercado[]
+  listas            Lista[]
+  produtosCriados   Produto[]              @relation("ProdutoCriadoPor")
+  produtosUsuario   ProdutoUsuario[]
+  historicoPrecos   HistoricoPreco[]
+  operacoes         OperacaoSincronizacao[]
+
+  @@map("usuarios")
+}
+
+model TokenAtualizacao {
+  id         String    @id @db.Uuid
+  jti        String    @unique
+  usuarioId  String    @map("usuario_id") @db.Uuid
+  tokenHash  String    @map("token_hash")
+  expiraEm   DateTime  @map("expira_em")
+  revogadoEm DateTime? @map("revogado_em")
+  criadoEm   DateTime  @default(now()) @map("criado_em")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("tokens_atualizacao")
+}
+
+// ── Catálogo ─────────────────────────────────────────────────────────
+
+/// `usuarioId` nulo = categoria padrão do sistema (visível para todos).
+/// `ordem` é a ordem do corredor do mercado, arrastável pelo usuário.
+model Categoria {
+  id           String   @id @db.Uuid
+  nome         String
+  icone        String?
+  ordem        Int      @default(0)
+  usuarioId    String?  @map("usuario_id") @db.Uuid
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  usuario         Usuario?         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  produtos        Produto[]
+  produtosUsuario ProdutoUsuario[]
+  itens           ListaItem[]
+
+  @@unique([usuarioId, nome])
+  @@index([usuarioId, ordem])
+  @@map("categorias")
+}
+
+/// Catálogo GLOBAL, compartilhado entre todos os usuários. Todo cadastro
+/// manual alimenta este catálogo: com muitos usuários o app passa a conhecer
+/// o EAN brasileiro melhor que as APIs públicas, que têm cobertura baixa aqui.
+/// `confirmacoes` é a moderação leve — quantas vezes o cadastro foi confirmado
+/// por outra pessoa que bipou o mesmo código.
+model Produto {
+  id           String        @id @db.Uuid
+  ean          String?       @unique
+  nome         String
+  marca        String?
+  imagemUrl    String?       @map("imagem_url")
+  tipoVenda    TipoVenda     @default(UNIDADE) @map("tipo_venda")
+  unidade      String        @default("un")
+  categoriaId  String?       @map("categoria_id") @db.Uuid
+  origem       OrigemProduto @default(MANUAL)
+  confirmacoes Int           @default(0)
+  criadoPorId  String?       @map("criado_por_id") @db.Uuid
+  ativo        Boolean       @default(true)
+  criadoEm     DateTime      @default(now()) @map("criado_em")
+  atualizadoEm DateTime      @updatedAt @map("atualizado_em")
+
+  categoria       Categoria?       @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  criadoPor       Usuario?         @relation("ProdutoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  produtosUsuario ProdutoUsuario[]
+  itens           ListaItem[]
+  historicoPrecos HistoricoPreco[]
+
+  // Busca por EAN precisa ser imediata: é o caminho crítico do scanner.
+  @@index([ean])
+  @@index([nome])
+  @@map("produtos")
+}
+
+/// Personalização do produto global para um usuário (apelido, categoria e
+/// unidade preferidas). Mantém o catálogo compartilhado limpo sem impedir
+/// que cada pessoa chame o produto como quiser.
+model ProdutoUsuario {
+  id               String   @id @db.Uuid
+  usuarioId        String   @map("usuario_id") @db.Uuid
+  produtoId        String   @map("produto_id") @db.Uuid
+  apelido          String?
+  categoriaId      String?  @map("categoria_id") @db.Uuid
+  unidadePreferida String?  @map("unidade_preferida")
+  favorito         Boolean  @default(false)
+  criadoEm         DateTime @default(now()) @map("criado_em")
+  atualizadoEm     DateTime @updatedAt @map("atualizado_em")
+
+  usuario   Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  produto   Produto    @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  categoria Categoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+
+  @@unique([usuarioId, produtoId])
+  @@map("produtos_usuario")
+}
+
+/// Sem mercado o histórico de preço não significa nada: R$ 29,90 no atacado
+/// e R$ 29,90 na loja de bairro são fatos diferentes.
+model Mercado {
+  id           String   @id @db.Uuid
+  usuarioId    String   @map("usuario_id") @db.Uuid
+  nome         String
+  cidade       String?
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  usuario         Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  listas          Lista[]
+  historicoPrecos HistoricoPreco[]
+
+  @@unique([usuarioId, nome])
+  @@map("mercados")
+}
+
+// ── Listas ───────────────────────────────────────────────────────────
+
+/// `excluidoEm` é tombstone, não enfeite: sem ele um item apagado offline
+/// ressuscita na próxima sincronização.
+model Lista {
+  id           String      @id @db.Uuid
+  usuarioId    String      @map("usuario_id") @db.Uuid
+  nome         String
+  data         DateTime    @db.Date
+  observacao   String?
+  orcamento    Decimal?    @db.Decimal(12, 2)
+  mercadoId    String?     @map("mercado_id") @db.Uuid
+  status       StatusLista @default(RASCUNHO)
+  finalizadaEm DateTime?   @map("finalizada_em")
+  criadoEm     DateTime    @default(now()) @map("criado_em")
+  atualizadoEm DateTime    @updatedAt @map("atualizado_em")
+  excluidoEm   DateTime?   @map("excluido_em")
+
+  usuario Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  mercado Mercado?    @relation(fields: [mercadoId], references: [id], onDelete: SetNull)
+  itens   ListaItem[]
+
+  // O pull incremental filtra por (usuário, atualizadoEm) — é o índice que
+  // sustenta a sincronização delta.
+  @@index([usuarioId, atualizadoEm])
+  @@index([usuarioId, status])
+  @@map("listas")
+}
+
+/// Regra 6/7: o preço pago fica congelado NO ITEM. Alterar o produto depois
+/// nunca altera compras já feitas.
+///
+/// Para tipoVenda = PESO, `quantidade` é o peso em kg e `precoUnitario` é o
+/// preço por kg — por isso quantidade é Decimal(10,3), não inteiro.
+model ListaItem {
+  id          String     @id @db.Uuid
+  listaId     String     @map("lista_id") @db.Uuid
+  produtoId   String?    @map("produto_id") @db.Uuid
+  nomeLivre   String?    @map("nome_livre")
+  categoriaId String?    @map("categoria_id") @db.Uuid
+  ordem       Int        @default(0)
+  origem      OrigemItem @default(PLANEJADO)
+  unidade     String     @default("un")
+
+  quantidadePlanejada Decimal  @default(1) @map("quantidade_planejada") @db.Decimal(10, 3)
+  precoEstimado       Decimal? @map("preco_estimado") @db.Decimal(12, 2)
+
+  comprado      Boolean   @default(false)
+  quantidade    Decimal?  @db.Decimal(10, 3)
+  precoUnitario Decimal?  @map("preco_unitario") @db.Decimal(12, 2)
+  total         Decimal?  @db.Decimal(12, 2)
+  compradoEm    DateTime? @map("comprado_em")
+
+  observacao   String?
+  criadoEm     DateTime  @default(now()) @map("criado_em")
+  atualizadoEm DateTime  @updatedAt @map("atualizado_em")
+  excluidoEm   DateTime? @map("excluido_em")
+
+  lista     Lista           @relation(fields: [listaId], references: [id], onDelete: Cascade)
+  produto   Produto?        @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  categoria Categoria?      @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  historico HistoricoPreco?
+
+  @@index([listaId])
+  @@index([listaId, comprado])
+  @@map("lista_itens")
+}
+
+/// Um registro por item comprado. `listaItemId` é único justamente para
+/// tornar o registro idempotente: reenviar a mesma compra não duplica o
+/// histórico nem distorce a média.
+model HistoricoPreco {
+  id          String   @id @db.Uuid
+  usuarioId   String   @map("usuario_id") @db.Uuid
+  produtoId   String   @map("produto_id") @db.Uuid
+  mercadoId   String?  @map("mercado_id") @db.Uuid
+  listaItemId String?  @unique @map("lista_item_id") @db.Uuid
+  preco       Decimal  @db.Decimal(12, 2)
+  quantidade  Decimal  @db.Decimal(10, 3)
+  total       Decimal  @db.Decimal(12, 2)
+  data        DateTime @db.Date
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  usuario   Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  produto   Produto    @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  mercado   Mercado?   @relation(fields: [mercadoId], references: [id], onDelete: SetNull)
+  listaItem ListaItem? @relation(fields: [listaItemId], references: [id], onDelete: SetNull)
+
+  @@index([usuarioId, produtoId, data])
+  @@map("historico_precos")
+}
+
+// ── Sincronização ────────────────────────────────────────────────────
+
+/// Registro das operações já aplicadas (id gerado pelo cliente). É o que
+/// garante idempotência: se o app reenviar o lote porque a resposta se
+/// perdeu, a operação repetida é ignorada em vez de duplicar dados.
+model OperacaoSincronizacao {
+  id         String   @id @db.Uuid
+  usuarioId  String   @map("usuario_id") @db.Uuid
+  entidade   String
+  entidadeId String   @map("entidade_id") @db.Uuid
+  acao       String
+  aplicadaEm DateTime @default(now()) @map("aplicada_em")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, aplicadaEm])
+  @@map("operacoes_sincronizacao")
+}
