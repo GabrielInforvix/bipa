@@ -178,15 +178,28 @@ class ListasController extends GetxController {
     }
   }
 
-  Future<MercadoModel?> criarMercado(String nome) async {
-    try {
-      final m = await _api.criarMercado(nome);
-      await RepositorioListas.salvarMercados([m]);
-      mercados.value = await RepositorioListas.mercados();
-      return m;
-    } catch (_) {
-      return null;
-    }
+  /// A ordem das categorias é o itinerário do corredor. O usuário arrasta uma
+  /// vez e a lista inteira passa a andar no ritmo do mercado dele.
+  Future<void> reordenarCategorias(List<CategoriaModel> novaOrdem) async {
+    await RepositorioListas.reordenarCategorias(novaOrdem);
+    await recarregar();
+    _sincronizar();
+  }
+
+  /// Local primeiro, como tudo: o mercado existe na hora, mesmo sem sinal,
+  /// e sobe pela fila. Nome repetido devolve o que já existe em vez de criar
+  /// um "Atacadão" segundo.
+  Future<MercadoModel> criarMercado(String nome) async {
+    final limpo = nome.trim();
+    final existente = mercados
+        .where((m) => m.nome.toLowerCase() == limpo.toLowerCase())
+        .firstOrNull;
+    if (existente != null) return existente;
+
+    final novo = await RepositorioListas.criarMercadoLocal(limpo);
+    mercados.value = await RepositorioListas.mercados();
+    _sincronizar();
+    return novo;
   }
 
   Future<HistoricoPrecos> historico(String produtoId) =>

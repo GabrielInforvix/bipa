@@ -361,6 +361,48 @@ class RepositorioListas {
         .toList();
   }
 
+  /// Reordena as categorias — a ordem É o corredor do mercado. Além de salvar
+  /// e enfileirar, reescreve a ordem nos itens das listas locais: cada item
+  /// guarda uma cópia da ordem da sua categoria (feita na hidratação), e sem
+  /// este passo o agrupamento das listas só mudaria na próxima sincronização,
+  /// fazendo a tela parecer que ignorou o arrasto.
+  static Future<void> reordenarCategorias(List<CategoriaModel> novaOrdem) async {
+    final db = await BancoLocal.instancia;
+    await db.transaction((txn) async {
+      for (final (i, c) in novaOrdem.indexed) {
+        await BancoLocal.categorias.record(c.id).put(
+              txn,
+              CategoriaModel(id: c.id, nome: c.nome, icone: c.icone, ordem: i)
+                  .toJson(),
+            );
+      }
+    });
+
+    for (final (i, c) in novaOrdem.indexed) {
+      if (c.ordem == i) continue; // não mexeu, não sobe
+      await FilaSincronizacao.enfileirar(
+        entidade: EntidadeSync.categoria,
+        entidadeId: c.id,
+        acao: AcaoSync.atualizar,
+        dados: {'nome': c.nome, 'icone': c.icone, 'ordem': i},
+      );
+    }
+
+    final mapa = {for (final (i, c) in novaOrdem.indexed) c.id: i};
+    for (final lista in await listas()) {
+      var mudou = false;
+      final itens = lista.itens.map((item) {
+        final ordem = mapa[item.categoriaId];
+        if (ordem == null || ordem == item.categoriaOrdem) return item;
+        mudou = true;
+        final json = item.toJson();
+        json['categoria'] = {'nome': item.categoriaNome, 'ordem': ordem};
+        return ListaItemModel.fromJson(json);
+      }).toList();
+      if (mudou) await salvarLocal(lista.copyWith(itens: itens));
+    }
+  }
+
   static Future<void> salvarCategorias(List<CategoriaModel> categorias) async {
     if (categorias.isEmpty) return;
     final db = await BancoLocal.instancia;
@@ -380,6 +422,20 @@ class RepositorioListas {
     return registros
         .map((r) => MercadoModel.fromJson(Map<String, dynamic>.from(r.value)))
         .toList();
+  }
+
+  /// Mercado criado na hora, no aparelho — inclusive na porta do próprio
+  /// mercado, sem sinal. Sobe pela fila como tudo o mais.
+  static Future<MercadoModel> criarMercadoLocal(String nome) async {
+    final mercado = MercadoModel(id: novoId(), nome: nome.trim());
+    await salvarMercados([mercado]);
+    await FilaSincronizacao.enfileirar(
+      entidade: EntidadeSync.mercado,
+      entidadeId: mercado.id,
+      acao: AcaoSync.criar,
+      dados: {'nome': mercado.nome},
+    );
+    return mercado;
   }
 
   static Future<void> salvarMercados(List<MercadoModel> mercados) async {

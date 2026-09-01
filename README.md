@@ -1,5 +1,7 @@
 # Bipa
 
+![CI](https://github.com/GabrielInforvix/bipa/actions/workflows/ci.yml/badge.svg)
+
 Lista de supermercado com leitura de código de barras. Monte a lista em casa e,
 no mercado, bipe os produtos para ver **o total da compra subindo em tempo
 real** — antes de chegar no caixa.
@@ -104,7 +106,7 @@ rede privada durante o teste.
 - Produtos por peso (açougue, hortifrúti, frios) com R$/kg
 - Produto fora da lista → compra extra, contabilizada à parte
 - Orçamento com barra de gasto e marcador do estimado
-- Desfazer ao marcar comprado por engano
+- Desfazer devolve o item exatamente como estava (quantidade e preço)
 
 **Catálogo**
 - Cascata: catálogo local → etiqueta de balança → Open Food Facts → cadastro
@@ -113,17 +115,21 @@ rede privada durante o teste.
 - **Item escrito na mão** para o que não tem código de barras ("pão na
   padaria", "gelo")
 - **Editar o planejado**: quantidade, preço estimado e unidade (un/kg)
+- **Ordem do corredor**: arraste as categorias para a sequência do seu
+  mercado (Ajustes) — as listas passam a agrupar nessa ordem
+- **Cadastrar mercado** direto na criação da lista, offline
 
 **Depois da compra**
 - Resumo com estimado × pago, economia e planejados × extras separados
 - Histórico de preço por produto **e por mercado**, com gráfico e mín/máx/média
 - Repetir lista (preço anterior vira só referência)
-- Compartilhar em texto pronto para WhatsApp
+- Compartilhar pelo menu do sistema (WhatsApp etc.), com fallback de texto
 
 **Infraestrutura**
 - Offline-first: tudo funciona sem conexão e sobe depois
 - Sincronização idempotente com fila inspecionável
 - PWA instalável, com ícone, splash e service worker
+- CI no GitHub Actions: analyze + 51 testes + build a cada push
 - Autenticação JWT com refresh rotacionado
 
 ## O que ficou para depois

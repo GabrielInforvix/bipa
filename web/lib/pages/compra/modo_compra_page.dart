@@ -308,8 +308,29 @@ class _Conteudo extends StatelessWidget {
 
   void _alternar(BuildContext context, ListaItemModel item) {
     if (item.comprado) {
+      // Desmarcar apaga quantidade e preço pagos. Se o toque foi acidental —
+      // o erro mais comum no corredor — redigitar tudo é castigo; o DESFAZER
+      // devolve o item exatamente como estava.
+      final quantidade = item.quantidade;
+      final preco = item.precoUnitario;
       compra.desfazerCompra(item);
-      Aviso.neutro('${item.nome} voltou para os pendentes.');
+
+      if (quantidade != null && preco != null) {
+        Aviso.comDesfazer('${item.nome} voltou para os pendentes.', () {
+          final atual = compra.lista.value?.itens
+              .where((i) => i.id == item.id)
+              .firstOrNull;
+          if (atual != null) {
+            compra.comprarItem(
+              atual,
+              quantidade: quantidade,
+              precoUnitario: preco,
+            );
+          }
+        });
+      } else {
+        Aviso.neutro('${item.nome} voltou para os pendentes.');
+      }
     } else {
       _abrirPreco(context, item);
     }

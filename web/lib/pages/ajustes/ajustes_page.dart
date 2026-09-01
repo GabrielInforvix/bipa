@@ -202,6 +202,35 @@ class _AjustesPageState extends State<AjustesPage> {
               ),
             ],
 
+            const TituloCategoria('Compras'),
+            Cartao(
+              cor: Cores.superficie,
+              borda: Border.all(color: Cores.linha),
+              aoTocar: () => Get.toNamed('/categorias'),
+              child: const Row(
+                children: [
+                  Icon(Icons.route_outlined, size: 21, color: Cores.texto2),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Ordem do corredor',
+                            style: TextStyle(
+                                fontSize: 14.5, fontWeight: FontWeight.w600)),
+                        Text(
+                          'Arraste as categorias para a sequência do seu mercado',
+                          style:
+                              TextStyle(fontSize: 11.5, color: Cores.texto3),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, size: 20, color: Cores.texto3),
+                ],
+              ),
+            ),
+
             const TituloCategoria('Conta'),
             if (ParametrosGlobais.convidado) ...[
               Cartao(

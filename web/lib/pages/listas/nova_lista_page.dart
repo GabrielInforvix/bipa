@@ -26,6 +26,9 @@ class _NovaListaPageState extends State<NovaListaPage> {
   final _observacao = TextEditingController();
   final _orcamento = EntradaCentavos();
 
+  /// Valor-sentinela do item "+ Novo mercado" do seletor.
+  static const _novoMercado = '__novo__';
+
   DateTime _data = DateTime.now();
   String? _mercadoId;
   ListaModel? _copiarDe;
@@ -140,8 +143,17 @@ class _NovaListaPageState extends State<NovaListaPage> {
                                       value: m.id,
                                       child: Text(m.nome,
                                           overflow: TextOverflow.ellipsis)),
+                                const DropdownMenuItem(
+                                  value: _novoMercado,
+                                  child: Text('+ Novo mercado',
+                                      style: TextStyle(
+                                          color: Cores.laranjaEscuro,
+                                          fontWeight: FontWeight.w600)),
+                                ),
                               ],
-                              onChanged: (v) => setState(() => _mercadoId = v),
+                              onChanged: (v) => v == _novoMercado
+                                  ? _cadastrarMercado()
+                                  : setState(() => _mercadoId = v),
                             ),
                           ),
                         )),
@@ -217,6 +229,48 @@ class _NovaListaPageState extends State<NovaListaPage> {
         ],
       ),
     );
+  }
+
+  /// Cadastro do mercado sem sair da tela: um nome basta. Cidade e o resto
+  /// são detalhe que ninguém quer preencher na hora de montar a lista.
+  Future<void> _cadastrarMercado() async {
+    final controle = TextEditingController();
+    final nome = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Novo mercado',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+        content: TextField(
+          controller: controle,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+              hintText: 'Ex.: Atacadão da Marginal',
+              labelText: 'Nome do mercado'),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child:
+                const Text('Cancelar', style: TextStyle(color: Cores.texto2)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Cores.laranja),
+            onPressed: () => Navigator.pop(ctx, controle.text.trim()),
+            child: const Text('Criar'),
+          ),
+        ],
+      ),
+    );
+
+    if (nome == null || nome.isEmpty) {
+      setState(() {}); // devolve o seletor ao valor anterior
+      return;
+    }
+    final mercado = await _listas.criarMercado(nome);
+    setState(() => _mercadoId = mercado.id);
   }
 
   Future<void> _escolherData() async {

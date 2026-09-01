@@ -10,6 +10,7 @@ import 'globais/parametros_globais.dart';
 import 'navigation/auth_middleware.dart';
 import 'offline/sincronizador.dart';
 import 'pages/ajustes/ajustes_page.dart';
+import 'pages/ajustes/categorias_page.dart';
 import 'pages/compra/modo_compra_page.dart';
 import 'pages/compra/resumo_page.dart';
 import 'pages/compra/scanner_page.dart';
@@ -157,6 +158,11 @@ class BipaApp extends StatelessWidget {
         GetPage(
           name: '/ajustes',
           page: () => const AjustesPage(),
+          middlewares: [AuthMiddleware()],
+        ),
+        GetPage(
+          name: '/categorias',
+          page: () => const CategoriasPage(),
           middlewares: [AuthMiddleware()],
         ),
       ],

@@ -180,7 +180,10 @@ Campos em português com `@map` snake_case + `@@map`. Pontos que importam:
   indexado — é o caminho crítico do scanner. Produto **sem** EAN é permitido.
 - `produtos` é o catálogo **global**; `produtos_usuario` guarda a
   personalização (apelido, categoria, unidade) sem sujar o catálogo de todos.
-- `categorias.ordem` é a **ordem do corredor**, arrastável e por usuário.
+- `categorias.ordem` é a **ordem do corredor**, arrastável em `/categorias`
+  (Ajustes). Reordenar também reescreve a ordem copiada nos itens das
+  listas locais — sem isso o agrupamento só mudaria na próxima
+  sincronização (ver `reordenarCategorias` no repositório).
 - `listas.mercadoId` e `historico_precos.mercadoId` são nuláveis mas existem
   desde o início: sem mercado o histórico mistura atacado com loja de bairro.
 - `historico_precos.listaItemId` é **único** — é o que torna a finalização
@@ -203,6 +206,13 @@ Campos em português com `@map` snake_case + `@@map`. Pontos que importam:
 `GET|POST /mercados` · `POST|GET /sincronizacao` · `GET /dashboard/resumo`
 
 Tudo exige JWT, menos `register`/`login`/`refresh`.
+
+## CI
+
+`.github/workflows/ci.yml` roda em todo push/PR: API (build + jest com
+Postgres 16 em service container) e Flutter (analyze + testes + build web),
+em jobs independentes. Flutter fixado em 3.44.0 — a mesma versão da máquina
+de desenvolvimento.
 
 ## Testes
 

@@ -1,0 +1,94 @@
+# CI do Bipa: nenhum commit chega ao celular sem passar por analyze + testes.
+#
+# Dois jobs independentes — uma falha no Flutter não esconde uma falha na API.
+# Os testes da sincronização rodam contra um Postgres de verdade (container de
+# serviço), porque é exatamente a conversa com o banco que eles existem para
+# vigiar.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  api:
+    name: API (NestJS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mercado_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # No CI só existe o banco de teste — as duas variáveis apontam para ele.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mercado_test?schema=public
+      DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/mercado_test?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar cliente Prisma e aplicar migrações
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+
+      - name: Compilar
+        run: npm run build
+
+      - name: Testes (balança + integração da sincronização)
+        run: npx jest --ci
+
+  app:
+    name: App (Flutter)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # Mesma versão da máquina de desenvolvimento — divergência de versão
+          # já é meio caminho para um "funciona na minha máquina".
+          flutter-version: 3.44.0
+          cache: true
+
+      - name: Dependências
+        run: flutter pub get
+
+      - name: Análise estática
+        run: flutter analyze
+
+      - name: Testes (totais, teclado de centavos, folha de item, convidado)
+        run: flutter test
+
+      # Compilar o web pega o que analyze não pega: shader, tree-shake de
+      # ícone, import condicional errado.
+      - name: Build web
+        run: flutter build web --release

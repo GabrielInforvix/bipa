@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../controllers/listas_controller.dart';
 import '../../extensions/data_extension.dart';
@@ -341,9 +342,10 @@ class _Acoes extends StatelessWidget {
     );
   }
 
-  /// Texto pronto para WhatsApp. Resolve o compartilhamento familiar antes de
-  /// existir lista multiusuário.
-  void _compartilhar(BuildContext context) {
+  /// Compartilha pelo menu do sistema — no celular cai direto no WhatsApp,
+  /// que é onde a família está. Sem Web Share (navegador de computador), o
+  /// texto abre num diálogo para copiar.
+  Future<void> _compartilhar(BuildContext context) async {
     final t = lista.totais;
     final linhas = [
       '*${lista.nome}*',
@@ -360,6 +362,18 @@ class _Acoes extends StatelessWidget {
             : 'Acima do estimado: ${t.economia.abs().emReais}',
     ];
 
+    final texto = linhas.join('\n');
+    try {
+      await SharePlus.instance.share(ShareParams(
+        text: texto,
+        subject: lista.nome,
+      ));
+      return;
+    } catch (_) {
+      // Plataforma sem menu de compartilhar: segue para o diálogo.
+    }
+    if (!context.mounted) return;
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -368,7 +382,7 @@ class _Acoes extends StatelessWidget {
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
         content: SingleChildScrollView(
           child: SelectableText(
-            linhas.join('\n'),
+            texto,
             style: const TextStyle(fontSize: 12.5, height: 1.5),
           ),
         ),
