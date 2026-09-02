@@ -3,12 +3,15 @@ import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../controllers/listas_controller.dart';
+import '../../globais/parametros_globais.dart';
 import '../../extensions/data_extension.dart';
 import '../../extensions/num_extension.dart';
 import '../../models/lista_model.dart';
 import '../../widget/componentes.dart';
 import '../../widget/cores.dart';
 import '../../widget/item_lista.dart';
+import '../../widget/pedir_conta.dart';
+import '../listas/folha_compartilhar.dart';
 
 /// Resumo da compra finalizada.
 ///
@@ -44,12 +47,35 @@ class ResumoPage extends StatelessWidget {
 
           return Column(
             children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back, size: 22),
-                  onPressed: () => Get.offAllNamed('/inicio'),
-                ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, size: 22),
+                    onPressed: () => Get.offAllNamed('/inicio'),
+                  ),
+                  const Spacer(),
+                  // Compra fechada também compartilha: é daqui que nasce o
+                  // "mês que vem a gente monta junto" — e foi aqui que a
+                  // procura pelo botão terminava sem saída.
+                  IconButton(
+                    icon: const Icon(Icons.group_add_outlined,
+                        size: 22, color: Cores.laranjaEscuro),
+                    tooltip: 'Compartilhar lista',
+                    onPressed: () async {
+                      if (ParametrosGlobais.convidado) {
+                        await pedirConta(
+                          context,
+                          recurso: 'Compartilhar a lista',
+                          porque: 'O convite passa pelo servidor para chegar '
+                              'ao celular da outra pessoa.',
+                        );
+                        return;
+                      }
+                      await FolhaCompartilhar.abrir(context, lista);
+                      await listas.atualizarDoServidor();
+                    },
+                  ),
+                ],
               ),
               Expanded(
                 child: ListView(
