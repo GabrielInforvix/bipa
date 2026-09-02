@@ -280,8 +280,21 @@ class _Cabecalho extends StatelessWidget {
             icon: const Icon(Icons.more_vert, size: 22),
             onSelected: (v) {
               if (v == 'excluir') aoExcluir();
+              if (v == 'compartilhar') aoCompartilhar();
             },
             itemBuilder: (_) => [
+              // Icone sem rotulo nao se acha: a palavra fica no menu tambem.
+              const PopupMenuItem(
+                value: 'compartilhar',
+                child: Row(
+                  children: [
+                    Icon(Icons.group_add_outlined,
+                        size: 19, color: Cores.texto2),
+                    SizedBox(width: 10),
+                    Text('Compartilhar lista'),
+                  ],
+                ),
+              ),
               PopupMenuItem(
                 value: 'excluir',
                 child: Text(

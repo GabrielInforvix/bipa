@@ -12,6 +12,7 @@ import '../../widget/cores.dart';
 import '../../widget/feedback.dart';
 import '../../widget/item_lista.dart';
 import '../../widget/pedir_conta.dart';
+import '../listas/folha_compartilhar.dart';
 import 'folha_preco.dart';
 
 /// Modo Compra — a tela usada dentro do supermercado.
@@ -59,6 +60,21 @@ class _ModoCompraPageState extends State<ModoCompraPage> {
     super.dispose();
   }
 
+  Future<void> _compartilhar(BuildContext context, ListaModel lista) async {
+    if (ParametrosGlobais.convidado) {
+      await pedirConta(
+        context,
+        recurso: 'Compartilhar a lista',
+        porque: 'O convite passa pelo servidor para chegar ao celular da '
+            'outra pessoa.',
+      );
+      return;
+    }
+    await FolhaCompartilhar.abrir(context, lista);
+    // Membros podem ter mudado; a tela relê do banco local.
+    await _compra.carregar(lista.id);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -73,7 +89,10 @@ class _ModoCompraPageState extends State<ModoCompraPage> {
 
           return Column(
             children: [
-              _BarraTopo(lista: lista),
+              _BarraTopo(
+                lista: lista,
+                aoCompartilhar: () => _compartilhar(context, lista),
+              ),
               _Total(lista: lista),
               _Abas(compra: _compra, lista: lista),
               Expanded(child: _Conteudo(compra: _compra, lista: lista)),
@@ -88,8 +107,9 @@ class _ModoCompraPageState extends State<ModoCompraPage> {
 
 class _BarraTopo extends StatelessWidget {
   final ListaModel lista;
+  final VoidCallback aoCompartilhar;
 
-  const _BarraTopo({required this.lista});
+  const _BarraTopo({required this.lista, required this.aoCompartilhar});
 
   @override
   Widget build(BuildContext context) {
@@ -123,22 +143,37 @@ class _BarraTopo extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           // "Maria está comprando" evita o susto do total mudando "sozinho"
-          // — sem isso, a compra a dois parece assombrada.
+          // — sem isso, a compra a dois parece assombrada. O chip de pessoas
+          // também é o caminho para a folha de compartilhar.
           if (lista.quemEstaComprando != null)
             Padding(
               padding: const EdgeInsets.only(right: 6),
-              child: Etiqueta(
-                '${lista.quemEstaComprando} está comprando',
-                cor: Cores.verde,
-                fundo: Cores.verdeSuave,
-                icone: Icons.sync,
+              child: GestureDetector(
+                onTap: aoCompartilhar,
+                child: Etiqueta(
+                  '${lista.quemEstaComprando} está comprando',
+                  cor: Cores.verde,
+                  fundo: Cores.verdeSuave,
+                  icone: Icons.sync,
+                ),
               ),
             )
           else if (lista.rotuloPessoas != null)
             Padding(
               padding: const EdgeInsets.only(right: 6),
-              child: Etiqueta(lista.rotuloPessoas!,
-                  icone: Icons.group_outlined),
+              child: GestureDetector(
+                onTap: aoCompartilhar,
+                child: Etiqueta(lista.rotuloPessoas!,
+                    icone: Icons.group_outlined),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.group_add_outlined,
+                  size: 21, color: Cores.laranjaEscuro),
+              tooltip: 'Compartilhar lista',
+              visualDensity: VisualDensity.compact,
+              onPressed: aoCompartilhar,
             ),
           Obx(() {
             final ok = conexao.online.value && conexao.pendentes.value == 0;
