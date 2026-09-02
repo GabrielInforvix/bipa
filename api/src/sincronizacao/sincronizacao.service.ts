@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { INCLUIR_PESSOAS, minhaLista } from '../comum/acesso';
 import { PrismaService } from '../prisma/prisma.service';
 import { OperacaoDto, SincronizarDto } from './dto/sincronizar.dto';
 
@@ -132,11 +133,17 @@ export class SincronizacaoService {
     const [listas, itens, categorias, mercados, produtosUsuario] =
       await Promise.all([
         this.prisma.lista.findMany({
-          where: { usuarioId, atualizadoEm: depois },
+          where: { atualizadoEm: depois, AND: [minhaLista(usuarioId)] },
+          // As pessoas viajam junto: e delas que o app tira o "com Maria"
+          // e as iniciais de quem comprou.
+          include: INCLUIR_PESSOAS,
           orderBy: { atualizadoEm: 'asc' },
         }),
         this.prisma.listaItem.findMany({
-          where: { lista: { usuarioId }, atualizadoEm: depois },
+          where: {
+            lista: minhaLista(usuarioId),
+            atualizadoEm: depois,
+          },
           orderBy: { atualizadoEm: 'asc' },
         }),
         this.prisma.categoria.findMany({
@@ -155,7 +162,7 @@ export class SincronizacaoService {
             OR: [
               { criadoPorId: usuarioId },
               { produtosUsuario: { some: { usuarioId } } },
-              { itens: { some: { lista: { usuarioId } } } },
+              { itens: { some: { lista: minhaLista(usuarioId) } } },
             ],
           },
           orderBy: { atualizadoEm: 'asc' },
@@ -196,11 +203,23 @@ export class SincronizacaoService {
     ocorridoEm: Date,
   ) {
     const atual = await this.prisma.lista.findFirst({
-      where: { id: op.entidadeId, usuarioId },
+      where: { id: op.entidadeId, AND: [minhaLista(usuarioId)] },
     });
 
     if (op.acao === 'excluir') {
       if (!atual) return;
+      // Membro que "excluiu" no aparelho esta saindo da lista, nao apagando
+      // a lista da familia inteira.
+      if (atual.usuarioId !== usuarioId) {
+        await this.prisma.listaMembro.deleteMany({
+          where: { listaId: atual.id, usuarioId },
+        });
+        await this.prisma.lista.update({
+          where: { id: atual.id },
+          data: { atualizadoEm: new Date() },
+        });
+        return;
+      }
       await this.prisma.lista.update({
         where: { id: atual.id },
         data: { excluidoEm: ocorridoEm },
@@ -258,7 +277,7 @@ export class SincronizacaoService {
     ocorridoEm: Date,
   ) {
     const atual = await this.prisma.listaItem.findFirst({
-      where: { id: op.entidadeId, lista: { usuarioId } },
+      where: { id: op.entidadeId, lista: minhaLista(usuarioId) },
     });
 
     if (op.acao === 'excluir') {
@@ -285,6 +304,10 @@ export class SincronizacaoService {
       quantidadePlanejada: decimal(d.quantidadePlanejada),
       precoEstimado: decimal(d.precoEstimado),
       comprado,
+      // Quem sincronizou a compra e quem comprou — vira a inicial no item e
+      // o dono do registro de preco. Desmarcar limpa.
+      compradoPorId:
+        comprado === true ? usuarioId : comprado === false ? null : undefined,
       quantidade,
       precoUnitario,
       total:
@@ -301,7 +324,7 @@ export class SincronizacaoService {
         throw new FalhaPermanente('Item sem lista de origem.');
       }
       const lista = await this.prisma.lista.findFirst({
-        where: { id: listaId, usuarioId },
+        where: { id: listaId, AND: [minhaLista(usuarioId)] },
       });
       if (!lista) {
         throw new FalhaPermanente('Lista do item não existe neste usuário.');
@@ -312,6 +335,7 @@ export class SincronizacaoService {
         data: {
           id: op.entidadeId,
           listaId,
+          criadoPorId: usuarioId,
           produtoId: dados.produtoId,
           nomeLivre: dados.nomeLivre,
           categoriaId: dados.categoriaId,
@@ -321,6 +345,7 @@ export class SincronizacaoService {
           quantidadePlanejada: dados.quantidadePlanejada ?? 1,
           precoEstimado: dados.precoEstimado,
           comprado: dados.comprado ?? false,
+          compradoPorId: dados.compradoPorId ?? null,
           quantidade: dados.quantidade,
           precoUnitario: dados.precoUnitario,
           total: dados.total,
@@ -340,6 +365,7 @@ export class SincronizacaoService {
           where: { id: atual.id },
           data: limpar({
             comprado: true,
+            compradoPorId: usuarioId,
             quantidade: dados.quantidade,
             precoUnitario: dados.precoUnitario,
             total: dados.total,

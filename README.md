@@ -93,6 +93,14 @@ rede privada durante o teste.
 
 ## O que já está pronto
 
+**Compartilhar (lista da família)**
+- Convite por código curto que viaja pelo WhatsApp — sem sistema de amigos
+- Todo mundo edita e bipa; o total é um só, nos celulares de todos
+- Cada item mostra a inicial de quem comprou/adicionou
+- Sincronização a cada 15 s durante a compra compartilhada
+- O histórico de preços vira da casa: o que um pagou vira sugestão do outro
+- Para testar a dois na máquina de dev: **maria@bipa.local / bipa123**
+
 **Entrar**
 - Login e cadastro na mesma tela
 - **Usar sem conta**: monta listas e faz compras só no aparelho; ao criar a

@@ -168,11 +168,34 @@ plataformas; devolver um id de view HTML quebraria o Android.
 - O `API_BASE` fica **gravado dentro do APK**. Um celular não enxerga o
   `localhost` do PC — por isso o build usa o IP da rede.
 
+## Lista compartilhada
+
+Convite por código curto (`convites`, multiuso, expira em 7 dias, sem sistema
+de amigos); membros em `lista_membros`. As regras que sustentam:
+
+- **Acesso é "dona OU membro"** via `comum/acesso.ts` (`minhaLista`), usado por
+  listas, sincronização, dashboard e histórico. Um `if` esquecido vira
+  vazamento — por isso é um helper só.
+- **O motor de sincronização não mudou**: idempotência, último-vence e
+  comprado-vence já eram cegos a quem é o aparelho. `compradoPorId`/
+  `criadoPorId` são preenchidos pelo servidor com o usuário da operação.
+- **"Excluir" vindo de membro vira sair da lista** — membro não apaga a lista
+  da família (vale no endpoint e na sincronização).
+- **Histórico de preços é da casa**: registro pertence a quem comprou, e a
+  consulta enxerga as listas em que você é membro.
+- **Pulso de 15 s**: `CompraController` sincroniza a cada 15 s quando a lista
+  compartilhada está em compra (decisão aprovada; WebSocket é fase B).
+- Só o dono convida/revoga/remove; membro sai sozinho. Convidado (sem conta)
+  não compartilha.
+- UI: `folha_compartilhar.dart`, `folha_entrar.dart`, iniciais nos itens via
+  `lista.inicialDe(...)`, selo `rotuloPessoas` ("com Maria") e
+  `quemEstaComprando` (compra de outro nos últimos 10 min).
+
 ## Modelo de dados (`api/prisma/schema.prisma`)
 
 `USUARIOS`, `TOKENS_ATUALIZACAO`, `CATEGORIAS`, `PRODUTOS`, `PRODUTOS_USUARIO`,
-`MERCADOS`, `LISTAS`, `LISTA_ITENS`, `HISTORICO_PRECOS`,
-`OPERACOES_SINCRONIZACAO`.
+`MERCADOS`, `LISTAS`, `LISTA_ITENS`, `LISTA_MEMBROS`, `CONVITES`,
+`HISTORICO_PRECOS`, `OPERACOES_SINCRONIZACAO`.
 
 Campos em português com `@map` snake_case + `@@map`. Pontos que importam:
 
@@ -205,6 +228,9 @@ Campos em português com `@map` snake_case + `@@map`. Pontos que importam:
 `GET|POST /categorias` · `PATCH /categorias/reordenar` ·
 `GET|POST /mercados` · `POST|GET /sincronizacao` · `GET /dashboard/resumo`
 
+`POST|DELETE /listas/:id/convites` · `GET /convites/:codigo` ·
+`POST /convites/:codigo/aceitar` · `DELETE /listas/:id/membros/:usuarioId`
+
 Tudo exige JWT, menos `register`/`login`/`refresh`.
 
 ## CI
@@ -220,7 +246,10 @@ de desenvolvimento.
   - `produtos/balanca.util.spec.ts` — parser de etiqueta de balança, com
     dígito verificador de EAN-13.
   - `sincronizacao/sincronizacao.service.spec.ts` — **integração contra
-    Postgres de verdade** (banco `mercado_test`, via `DATABASE_URL_TEST`).
+    Postgres de verdade** (banco `mercado_test`, via `DATABASE_URL_TEST`),
+    incluindo os casos de lista compartilhada com dois usuários.
+  - `convites/convites.service.spec.ts` — convite, prévia, aceite idempotente,
+    revogação e permissões de remoção (integração, mesmo banco).
     É de integração de propósito: o que pode dar errado ali é a conversa com o
     banco (upsert, constraint, `atualizadoEm` do servidor), e um mock testaria
     só o meu raciocínio sobre o banco. **Esses testes apagam dados** — jamais
@@ -239,7 +268,6 @@ de desenvolvimento.
 
 ## Próximas fases (fora do escopo atual)
 
-Comparação de preço entre mercados · lista compartilhada entre familiares ·
-sugestões pelo histórico · previsão da próxima compra · notificações ·
-apps nativos · assinatura Premium. O modelo de dados já comporta as três
-primeiras sem migração.
+Fase B do compartilhamento (WebSocket, notificações, papel só-leitura) ·
+comparação de preço entre mercados · sugestões pelo histórico · previsão da
+próxima compra · apps nativos · assinatura Premium.

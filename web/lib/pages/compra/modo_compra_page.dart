@@ -122,6 +122,24 @@ class _BarraTopo extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
+          // "Maria está comprando" evita o susto do total mudando "sozinho"
+          // — sem isso, a compra a dois parece assombrada.
+          if (lista.quemEstaComprando != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Etiqueta(
+                '${lista.quemEstaComprando} está comprando',
+                cor: Cores.verde,
+                fundo: Cores.verdeSuave,
+                icone: Icons.sync,
+              ),
+            )
+          else if (lista.rotuloPessoas != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Etiqueta(lista.rotuloPessoas!,
+                  icone: Icons.group_outlined),
+            ),
           Obx(() {
             final ok = conexao.online.value && conexao.pendentes.value == 0;
             return Etiqueta(
@@ -279,6 +297,8 @@ class _Conteudo extends StatelessWidget {
               LinhaItem(
                 item,
                 mostrarEstimado: aba == 0,
+                inicialOutro: lista.inicialDe(
+                    item.comprado ? item.compradoPorId : item.criadoPorId),
                 aoTocar: () => _abrirPreco(context, item),
                 aoAlternar: () => _alternar(context, item),
               ),

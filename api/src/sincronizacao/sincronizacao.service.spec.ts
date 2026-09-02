@@ -72,6 +72,9 @@ describe('SincronizacaoService (integração)', () => {
     await prisma.operacaoSincronizacao.deleteMany({
       where: { usuarioId: { in: [USUARIO, OUTRO_USUARIO] } },
     });
+    await prisma.listaMembro.deleteMany({
+      where: { usuarioId: { in: [USUARIO, OUTRO_USUARIO] } },
+    });
     await prisma.listaItem.deleteMany({
       where: { lista: { usuarioId: { in: [USUARIO, OUTRO_USUARIO] } } },
     });
@@ -410,6 +413,121 @@ describe('SincronizacaoService (integração)', () => {
       });
       const delta = await servico.puxar(USUARIO);
       expect(delta.listas).toHaveLength(1);
+    });
+  });
+
+  // ── Lista compartilhada ────────────────────────────────────────────
+
+  describe('lista compartilhada', () => {
+    /** DONO cria a lista; OUTRO_USUARIO entra como membro. */
+    async function listaComMembro() {
+      const listaId = id();
+      await prisma.lista.create({
+        data: {
+          id: listaId,
+          usuarioId: USUARIO,
+          nome: 'Da casa',
+          data: new Date('2026-09-01'),
+        },
+      });
+      await prisma.listaMembro.create({
+        data: { id: id(), listaId, usuarioId: OUTRO_USUARIO },
+      });
+      return listaId;
+    }
+
+    it('membro sincroniza item na lista do dono', async () => {
+      const listaId = await listaComMembro();
+      const itemId = id();
+
+      const resultado = await servico.sincronizar(OUTRO_USUARIO, {
+        operacoes: [
+          op('lista_item', itemId, 'criar', {
+            listaId,
+            nomeLivre: 'Café',
+            comprado: true,
+            quantidade: 1,
+            precoUnitario: 21.9,
+          }),
+        ],
+      });
+      expect(resultado.falhas).toHaveLength(0);
+
+      const item = await prisma.listaItem.findUnique({ where: { id: itemId } });
+      // A inicial ao lado do item: quem criou e comprou foi o membro.
+      expect(item!.criadoPorId).toBe(OUTRO_USUARIO);
+      expect(item!.compradoPorId).toBe(OUTRO_USUARIO);
+    });
+
+    it('o delta do membro traz a lista da família, com as pessoas', async () => {
+      const listaId = await listaComMembro();
+      const delta = await servico.puxar(OUTRO_USUARIO);
+      const lista = (delta.listas as Array<any>).find((l) => l.id === listaId);
+      expect(lista).toBeDefined();
+      expect(lista.usuario.nome).toBe('Teste'); // dono viaja junto
+      expect(lista.membros).toHaveLength(1);
+    });
+
+    it('quem NÃO é membro continua barrado', async () => {
+      const listaId = id();
+      await prisma.lista.create({
+        data: {
+          id: listaId,
+          usuarioId: USUARIO,
+          nome: 'Só minha',
+          data: new Date('2026-09-01'),
+        },
+      });
+
+      const resultado = await servico.sincronizar(OUTRO_USUARIO, {
+        operacoes: [
+          op('lista_item', id(), 'criar', { listaId, nomeLivre: 'Invasão' }),
+        ],
+      });
+      expect(resultado.falhas[0].permanente).toBe(true);
+
+      const delta = await servico.puxar(OUTRO_USUARIO);
+      expect(
+        (delta.listas as Array<any>).find((l) => l.id === listaId),
+      ).toBeUndefined();
+    });
+
+    it('excluir vindo de MEMBRO vira sair — a lista da família sobrevive', async () => {
+      const listaId = await listaComMembro();
+
+      await servico.sincronizar(OUTRO_USUARIO, {
+        operacoes: [op('lista', listaId, 'excluir')],
+      });
+
+      const lista = await prisma.lista.findUnique({ where: { id: listaId } });
+      expect(lista!.excluidoEm).toBeNull(); // ninguém perdeu a lista
+      const membros = await prisma.listaMembro.findMany({ where: { listaId } });
+      expect(membros).toHaveLength(0); // mas o membro saiu
+    });
+
+    it('comprado-vence continua valendo entre pessoas diferentes', async () => {
+      const listaId = await listaComMembro();
+      const itemId = id();
+      await prisma.listaItem.create({
+        data: { id: itemId, listaId, nomeLivre: 'Arroz', comprado: false },
+      });
+
+      // O membro comprou, mas a operação chegou "velha".
+      await servico.sincronizar(OUTRO_USUARIO, {
+        operacoes: [
+          op(
+            'lista_item',
+            itemId,
+            'atualizar',
+            { comprado: true, quantidade: 1, precoUnitario: 27.8 },
+            '2020-01-01T00:00:00.000Z',
+          ),
+        ],
+      });
+
+      const item = await prisma.listaItem.findUnique({ where: { id: itemId } });
+      expect(item!.comprado).toBe(true);
+      expect(item!.compradoPorId).toBe(OUTRO_USUARIO);
     });
   });
 

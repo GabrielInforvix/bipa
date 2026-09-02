@@ -65,6 +65,10 @@ model Usuario {
   produtosUsuario   ProdutoUsuario[]
   historicoPrecos   HistoricoPreco[]
   operacoes         OperacaoSincronizacao[]
+  participacoes     ListaMembro[]
+  convitesCriados   Convite[]
+  itensComprados    ListaItem[]             @relation("ItemCompradoPor")
+  itensAdicionados  ListaItem[]             @relation("ItemCriadoPor")
 
   @@map("usuarios")
 }
@@ -200,9 +204,11 @@ model Lista {
   atualizadoEm DateTime    @updatedAt @map("atualizado_em")
   excluidoEm   DateTime?   @map("excluido_em")
 
-  usuario Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  mercado Mercado?    @relation(fields: [mercadoId], references: [id], onDelete: SetNull)
-  itens   ListaItem[]
+  usuario  Usuario       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  mercado  Mercado?      @relation(fields: [mercadoId], references: [id], onDelete: SetNull)
+  itens    ListaItem[]
+  membros  ListaMembro[]
+  convites Convite[]
 
   // O pull incremental filtra por (usuário, atualizadoEm) — é o índice que
   // sustenta a sincronização delta.
@@ -236,10 +242,17 @@ model ListaItem {
   compradoEm    DateTime? @map("comprado_em")
 
   observacao   String?
+  // Numa lista compartilhada, o item lembra quem o trouxe e quem o comprou —
+  // é o que vira a inicial ao lado do item e o dono do registro de preço.
+  criadoPorId   String? @map("criado_por_id") @db.Uuid
+  compradoPorId String? @map("comprado_por_id") @db.Uuid
+
   criadoEm     DateTime  @default(now()) @map("criado_em")
   atualizadoEm DateTime  @updatedAt @map("atualizado_em")
   excluidoEm   DateTime? @map("excluido_em")
 
+  criadoPor   Usuario? @relation("ItemCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  compradoPor Usuario? @relation("ItemCompradoPor", fields: [compradoPorId], references: [id], onDelete: SetNull)
   lista     Lista           @relation(fields: [listaId], references: [id], onDelete: Cascade)
   produto   Produto?        @relation(fields: [produtoId], references: [id], onDelete: SetNull)
   categoria Categoria?      @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
@@ -248,6 +261,40 @@ model ListaItem {
   @@index([listaId])
   @@index([listaId, comprado])
   @@map("lista_itens")
+}
+
+/// Quem participa de uma lista além do dono. Todo membro edita e bipa —
+/// é lista de compras de família, não ERP. O dono (lista.usuarioId) é o
+/// único que remove gente e revoga convite.
+model ListaMembro {
+  id        String   @id @db.Uuid
+  listaId   String   @map("lista_id") @db.Uuid
+  usuarioId String   @map("usuario_id") @db.Uuid
+  entrouEm  DateTime @default(now()) @map("entrou_em")
+
+  lista   Lista   @relation(fields: [listaId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([listaId, usuarioId])
+  @@index([usuarioId])
+  @@map("lista_membros")
+}
+
+/// Convite por código curto, multiuso até ser revogado. Sem sistema de
+/// amigos: o código viaja pelo WhatsApp, que é onde a família já está.
+model Convite {
+  id          String    @id @db.Uuid
+  listaId     String    @map("lista_id") @db.Uuid
+  codigo      String    @unique
+  criadoPorId String    @map("criado_por_id") @db.Uuid
+  expiraEm    DateTime  @map("expira_em")
+  revogadoEm  DateTime? @map("revogado_em")
+  criadoEm    DateTime  @default(now()) @map("criado_em")
+
+  lista     Lista   @relation(fields: [listaId], references: [id], onDelete: Cascade)
+  criadoPor Usuario @relation(fields: [criadoPorId], references: [id], onDelete: Cascade)
+
+  @@map("convites")
 }
 
 /// Um registro por item comprado. `listaItemId` é único justamente para

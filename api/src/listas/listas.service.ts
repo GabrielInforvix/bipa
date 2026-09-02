@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { OrigemItem, Prisma, StatusLista, TipoVenda } from '@prisma/client';
+import { INCLUIR_PESSOAS, minhaLista } from '../comum/acesso';
 import { novoId } from '../comum/ids';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateItemDto } from './dto/create-item.dto';
@@ -8,6 +9,7 @@ import { UpdateItemDto } from './dto/update-item.dto';
 import { UpdateListaDto } from './dto/update-lista.dto';
 
 const INCLUDE_ITENS = {
+  ...INCLUIR_PESSOAS,
   itens: {
     where: { excluidoEm: null },
     orderBy: [{ ordem: 'asc' }, { criadoEm: 'asc' }],
@@ -38,7 +40,7 @@ export class ListasService {
 
   async listar(usuarioId: string, status?: StatusLista) {
     const listas = await this.prisma.lista.findMany({
-      where: { usuarioId, excluidoEm: null, status },
+      where: { excluidoEm: null, status, AND: [minhaLista(usuarioId)] },
       include: INCLUDE_ITENS,
       orderBy: [{ data: 'desc' }, { criadoEm: 'desc' }],
     });
@@ -47,7 +49,7 @@ export class ListasService {
 
   async porId(usuarioId: string, id: string) {
     const lista = await this.prisma.lista.findFirst({
-      where: { id, usuarioId, excluidoEm: null },
+      where: { id, excluidoEm: null, AND: [minhaLista(usuarioId)] },
       include: INCLUDE_ITENS,
     });
     if (!lista) throw new NotFoundException('Lista não encontrada.');
@@ -91,9 +93,22 @@ export class ListasService {
   }
 
   /** Exclusão lógica (tombstone): sem isso a lista apagada offline
-   *  ressuscitaria na próxima sincronização. */
+   *  ressuscitaria na próxima sincronização.
+   *
+   *  Numa lista compartilhada, "excluir" de um MEMBRO vira "sair": apagar a
+   *  lista da família inteira porque um saiu seria destruição alheia. */
   async remover(usuarioId: string, id: string) {
-    await this.exigir(usuarioId, id);
+    const lista = await this.exigir(usuarioId, id);
+    if (lista.usuarioId !== usuarioId) {
+      await this.prisma.listaMembro.deleteMany({
+        where: { listaId: id, usuarioId },
+      });
+      await this.prisma.lista.update({
+        where: { id },
+        data: { atualizadoEm: new Date() },
+      });
+      return { ok: true, saiu: true };
+    }
     const agora = new Date();
     await this.prisma.$transaction([
       this.prisma.lista.update({
@@ -126,6 +141,7 @@ export class ListasService {
       data: {
         id: dto.id ?? novoId(),
         listaId,
+        criadoPorId: usuarioId,
         produtoId: dto.produtoId,
         nomeLivre: dto.nomeLivre?.trim(),
         categoriaId: dto.categoriaId,
@@ -134,7 +150,7 @@ export class ListasService {
         ordem: dto.ordem ?? (ultimo ? ultimo.ordem + 1 : 0),
         quantidadePlanejada: dto.quantidadePlanejada ?? 1,
         precoEstimado: dto.precoEstimado,
-        ...this.camposDeCompra(dto),
+        ...this.camposDeCompra(dto, usuarioId),
       },
     });
     return this.porId(usuarioId, listaId);
@@ -164,7 +180,7 @@ export class ListasService {
         quantidadePlanejada: dto.quantidadePlanejada,
         precoEstimado: dto.precoEstimado,
         observacao: dto.observacao,
-        ...this.camposDeCompra(dto, item),
+        ...this.camposDeCompra(dto, usuarioId, item),
       },
     });
     return this.porId(usuarioId, listaId);
@@ -203,7 +219,7 @@ export class ListasService {
    */
   async finalizar(usuarioId: string, id: string) {
     const lista = await this.prisma.lista.findFirst({
-      where: { id, usuarioId, excluidoEm: null },
+      where: { id, excluidoEm: null, AND: [minhaLista(usuarioId)] },
       include: { itens: { where: { excluidoEm: null, comprado: true } } },
     });
     if (!lista) throw new NotFoundException('Lista não encontrada.');
@@ -219,6 +235,10 @@ export class ListasService {
               precoUnitario: i.precoUnitario,
               quantidade: i.quantidade,
               total: i.total,
+              // Decisão aprovada: o registro é de quem comprou o item, e a
+              // consulta enxerga as listas de que você participa — a memória
+              // de preços vira da casa.
+              compradorId: i.compradoPorId ?? lista.usuarioId,
             },
           ]
         : [],
@@ -230,7 +250,7 @@ export class ListasService {
           where: { listaItemId: item.id },
           create: {
             id: novoId(),
-            usuarioId,
+            usuarioId: item.compradorId,
             produtoId: item.produtoId,
             mercadoId: lista.mercadoId,
             listaItemId: item.id,
@@ -317,6 +337,7 @@ export class ListasService {
    */
   private camposDeCompra(
     dto: CreateItemDto | UpdateItemDto,
+    usuarioId: string,
     atual?: { quantidade: Prisma.Decimal | null; precoUnitario: Prisma.Decimal | null },
   ) {
     if (
@@ -336,6 +357,7 @@ export class ListasService {
         precoUnitario: null,
         total: null,
         compradoEm: null,
+        compradoPorId: null,
       };
     }
 
@@ -355,6 +377,8 @@ export class ListasService {
           ? Math.round(quantidade * preco * 100) / 100
           : null,
       compradoEm: comprado ? new Date() : null,
+      // A inicial ao lado do item e o dono do registro de preço.
+      compradoPorId: comprado ? usuarioId : null,
     };
   }
 
@@ -423,7 +447,7 @@ export class ListasService {
 
   private async exigir(usuarioId: string, id: string) {
     const lista = await this.prisma.lista.findFirst({
-      where: { id, usuarioId, excluidoEm: null },
+      where: { id, excluidoEm: null, AND: [minhaLista(usuarioId)] },
     });
     if (!lista) throw new NotFoundException('Lista não encontrada.');
     return lista;

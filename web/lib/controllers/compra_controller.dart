@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:get/get.dart';
 
 import '../globais/http_interceptor.dart';
+import '../globais/parametros_globais.dart';
 import '../models/lista_model.dart';
 import '../models/produto_model.dart';
 import '../offline/repositorio_listas.dart';
@@ -55,12 +58,50 @@ class CompraController extends GetxController {
   final carregando = false.obs;
   final aba = 0.obs; // 0 pendentes · 1 comprados · 2 extras
 
+  /// Pulso da compra compartilhada: com outra pessoa na mesma lista, o app
+  /// sincroniza a cada 15 s para o total dos dois andar junto. No corredor
+  /// isso é indistinguível de instantâneo — e não custa nenhuma
+  /// infraestrutura nova (decisão aprovada; WebSocket fica para a fase B).
+  Timer? _pulso;
+
   TotaisLista get totais => lista.value?.totais ?? const TotaisLista();
+
+  @override
+  void onClose() {
+    _pulso?.cancel();
+    super.onClose();
+  }
+
+  void _ajustarPulso() {
+    final l = lista.value;
+    final precisa = l != null &&
+        l.compartilhada &&
+        l.status == StatusLista.emCompra &&
+        ParametrosGlobais.temConta;
+    if (precisa && _pulso == null) {
+      _pulso = Timer.periodic(const Duration(seconds: 15), (_) async {
+        if (!Get.isRegistered<ConexaoController>()) return;
+        final conexao = Get.find<ConexaoController>();
+        if (!conexao.online.value) return;
+        await conexao.sincronizar();
+        // O que a outra pessoa bipou está no banco local agora; a tela só
+        // precisa reler — sem spinner, sem pular.
+        final atual = lista.value;
+        if (atual != null) {
+          lista.value = await RepositorioListas.lista(atual.id) ?? atual;
+        }
+      });
+    } else if (!precisa && _pulso != null) {
+      _pulso?.cancel();
+      _pulso = null;
+    }
+  }
 
   Future<void> carregar(String listaId) async {
     carregando.value = true;
     try {
       lista.value = await RepositorioListas.lista(listaId);
+      _ajustarPulso();
     } finally {
       carregando.value = false;
     }
@@ -73,6 +114,7 @@ class CompraController extends GetxController {
       l,
       status: StatusLista.emCompra,
     );
+    _ajustarPulso();
   }
 
   // ── Bipe ───────────────────────────────────────────────────────────

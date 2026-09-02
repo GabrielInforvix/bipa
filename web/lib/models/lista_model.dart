@@ -1,3 +1,4 @@
+import '../globais/parametros_globais.dart';
 import 'parse.dart';
 import 'produto_model.dart';
 
@@ -44,6 +45,26 @@ enum OrigemItem {
   bool get ehExtra => this == OrigemItem.extra;
 }
 
+/// Quem participa da lista além do dono.
+class MembroModel {
+  final String usuarioId;
+  final String nome;
+
+  const MembroModel({required this.usuarioId, required this.nome});
+
+  factory MembroModel.fromJson(Map<String, dynamic> json) {
+    final usuario = json['usuario'];
+    return MembroModel(
+      usuarioId: parseString(json['usuarioId']),
+      nome: usuario is Map
+          ? parseString(usuario['nome'])
+          : parseString(json['nome']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {'usuarioId': usuarioId, 'nome': nome};
+}
+
 class ListaItemModel {
   final String id;
   final String listaId;
@@ -68,6 +89,10 @@ class ListaItemModel {
   final ProdutoModel? produto;
   final String? observacao;
 
+  /// Nas listas compartilhadas: quem trouxe o item e quem o comprou.
+  final String? criadoPorId;
+  final String? compradoPorId;
+
   const ListaItemModel({
     required this.id,
     required this.listaId,
@@ -88,6 +113,8 @@ class ListaItemModel {
     this.compradoEm,
     this.produto,
     this.observacao,
+    this.criadoPorId,
+    this.compradoPorId,
   });
 
   String get nome => produto?.nome ?? nomeLivre ?? 'Item';
@@ -117,6 +144,7 @@ class ListaItemModel {
     double? precoEstimado,
     String? unidade,
     String? nomeLivre,
+    String? compradoPorId,
     bool limparCompra = false,
   }) =>
       ListaItemModel(
@@ -140,6 +168,9 @@ class ListaItemModel {
         compradoEm: limparCompra ? null : compradoEm,
         produto: produto,
         observacao: observacao,
+        criadoPorId: criadoPorId,
+        compradoPorId:
+            limparCompra ? null : (compradoPorId ?? this.compradoPorId),
       );
 
   factory ListaItemModel.fromJson(Map<String, dynamic> json) {
@@ -167,6 +198,8 @@ class ListaItemModel {
           ? ProdutoModel.fromJson(Map<String, dynamic>.from(produtoJson))
           : null,
       observacao: parseStringOpt(json['observacao']),
+      criadoPorId: parseStringOpt(json['criadoPorId']),
+      compradoPorId: parseStringOpt(json['compradoPorId']),
     );
   }
 
@@ -191,6 +224,8 @@ class ListaItemModel {
         'compradoEm': compradoEm?.toIso8601String(),
         'produto': produto?.toJson(),
         'observacao': observacao,
+        'criadoPorId': criadoPorId,
+        'compradoPorId': compradoPorId,
       };
 }
 
@@ -320,6 +355,11 @@ class ListaModel {
   final List<ListaItemModel> itens;
   final TotaisLista totais;
 
+  /// Pessoas da lista: dono + membros. Vazio de membros = lista só sua.
+  final String? donoId;
+  final String? donoNome;
+  final List<MembroModel> membros;
+
   const ListaModel({
     required this.id,
     required this.nome,
@@ -332,7 +372,65 @@ class ListaModel {
     this.finalizadaEm,
     this.itens = const [],
     this.totais = const TotaisLista(),
+    this.donoId,
+    this.donoNome,
+    this.membros = const [],
   });
+
+  bool get compartilhada => membros.isNotEmpty;
+
+  /// Quem está olhando a tela — para saber o que é "dos outros".
+  static String? get _meuId => ParametrosGlobais.usuario?.id;
+
+  /// "com Maria" · "com Maria e João" — o selo das telas de lista.
+  String? get rotuloPessoas {
+    if (!compartilhada) return null;
+    final meuId = _meuId;
+    final outros = [
+      if (donoId != null && donoId != meuId && donoNome != null) donoNome!,
+      ...membros.where((m) => m.usuarioId != meuId).map((m) => m.nome),
+    ];
+    if (outros.isEmpty) return null;
+    final nomes = outros.map((n) => n.split(' ').first).toList();
+    return nomes.length == 1
+        ? 'com ${nomes.first}'
+        : 'com ${nomes.sublist(0, nomes.length - 1).join(', ')} e ${nomes.last}';
+  }
+
+  /// Nome de um participante (dono ou membro) pelo id.
+  String? nomeDe(String? usuarioId) {
+    if (usuarioId == null) return null;
+    if (usuarioId == donoId) return donoNome;
+    for (final m in membros) {
+      if (m.usuarioId == usuarioId) return m.nome;
+    }
+    return null;
+  }
+
+  /// Inicial para o selo do item — só quando foi OUTRA pessoa.
+  String? inicialDe(String? usuarioId) {
+    final meuId = _meuId;
+    if (usuarioId == null || usuarioId == meuId) return null;
+    final nome = nomeDe(usuarioId);
+    return (nome == null || nome.isEmpty) ? null : nome[0].toUpperCase();
+  }
+
+  /// Alguém além de você comprou algo há pouco? É o "Maria está comprando".
+  String? get quemEstaComprando {
+    if (!compartilhada || status != StatusLista.emCompra) return null;
+    final meuId = _meuId;
+    final corte = DateTime.now().subtract(const Duration(minutes: 10));
+    for (final item in itens.reversed) {
+      if (item.comprado &&
+          item.compradoPorId != null &&
+          item.compradoPorId != meuId &&
+          (item.compradoEm?.isAfter(corte) ?? false)) {
+        final nome = nomeDe(item.compradoPorId);
+        if (nome != null) return nome.split(' ').first;
+      }
+    }
+    return null;
+  }
 
   List<ListaItemModel> get pendentes =>
       itens.where((i) => !i.comprado && !i.origem.ehExtra).toList();
@@ -375,6 +473,9 @@ class ListaModel {
     final novosItens = itens ?? this.itens;
     final novoOrcamento = orcamento ?? this.orcamento;
     return ListaModel(
+      donoId: donoId,
+      donoNome: donoNome,
+      membros: membros,
       id: id,
       nome: nome ?? this.nome,
       data: data,
@@ -392,6 +493,7 @@ class ListaModel {
 
   factory ListaModel.fromJson(Map<String, dynamic> json) {
     final mercado = json['mercado'];
+    final dono = json['usuario'];
     final itens = (json['itens'] as List? ?? [])
         .map((e) => ListaItemModel.fromJson(Map<String, dynamic>.from(e)))
         .toList();
@@ -412,6 +514,13 @@ class ListaModel {
       totais: json['totais'] is Map
           ? TotaisLista.fromJson(Map<String, dynamic>.from(json['totais']))
           : TotaisLista.calcular(itens, orcamento: orcamento),
+      donoId: dono is Map
+          ? parseStringOpt(dono['id'])
+          : parseStringOpt(json['usuarioId']),
+      donoNome: dono is Map ? parseStringOpt(dono['nome']) : null,
+      membros: (json['membros'] as List? ?? [])
+          .map((e) => MembroModel.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
     );
   }
 
@@ -427,5 +536,7 @@ class ListaModel {
         'finalizadaEm': finalizadaEm?.toIso8601String(),
         'itens': itens.map((e) => e.toJson()).toList(),
         'totais': totais.toJson(),
+        if (donoId != null) 'usuario': {'id': donoId, 'nome': donoNome},
+        'membros': membros.map((m) => m.toJson()).toList(),
       };
 }

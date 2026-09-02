@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { CategoriasModule } from './categorias/categorias.module';
+import { ConvitesModule } from './convites/convites.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ListasModule } from './listas/listas.module';
 import { MercadosModule } from './mercados/mercados.module';
@@ -20,6 +21,7 @@ import { SincronizacaoModule } from './sincronizacao/sincronizacao.module';
     PrismaModule,
     AuthModule,
     CategoriasModule,
+    ConvitesModule,
     MercadosModule,
     ProdutosModule,
     ListasModule,

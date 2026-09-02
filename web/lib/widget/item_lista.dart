@@ -16,12 +16,17 @@ class LinhaItem extends StatelessWidget {
   final VoidCallback? aoAlternar;
   final bool mostrarEstimado;
 
+  /// Inicial de OUTRA pessoa que comprou/adicionou o item, nas listas
+  /// compartilhadas. Nulo = foi você mesmo, ou a lista é só sua.
+  final String? inicialOutro;
+
   const LinhaItem(
     this.item, {
     super.key,
     this.aoTocar,
     this.aoAlternar,
     this.mostrarEstimado = false,
+    this.inicialOutro,
   });
 
   @override
@@ -82,6 +87,27 @@ class LinhaItem extends StatelessWidget {
                 ],
               ),
             ),
+            if (inicialOutro != null) ...[
+              Container(
+                width: 20,
+                height: 20,
+                decoration: const BoxDecoration(
+                  color: Cores.superficie3,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    inicialOutro!,
+                    style: const TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      color: Cores.texto2,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
             const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,

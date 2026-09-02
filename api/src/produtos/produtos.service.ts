@@ -1,6 +1,7 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OrigemProduto, Prisma, TipoVenda } from '@prisma/client';
+import { minhaLista } from '../comum/acesso';
 import { novoId } from '../comum/ids';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -233,7 +234,15 @@ export class ProdutosService {
   /** Histórico de preços do produto, com as estatísticas da tela. */
   async historicoPrecos(usuarioId: string, produtoId: string) {
     const registros = await this.prisma.historicoPreco.findMany({
-      where: { usuarioId, produtoId },
+      // A memoria de precos e da casa: o que alguem pagou numa lista de que
+      // voce participa vira sugestao no SEU teclado (decisao aprovada).
+      where: {
+        produtoId,
+        OR: [
+          { usuarioId },
+          { listaItem: { lista: minhaLista(usuarioId) } },
+        ],
+      },
       include: { mercado: { select: { id: true, nome: true } } },
       orderBy: { data: 'desc' },
       take: 60,
@@ -257,7 +266,13 @@ export class ProdutosService {
   /** Último preço pago pelo usuário — vira a sugestão de um toque no scanner. */
   async ultimoPreco(usuarioId: string, produtoId: string) {
     const ultimo = await this.prisma.historicoPreco.findFirst({
-      where: { usuarioId, produtoId },
+      where: {
+        produtoId,
+        OR: [
+          { usuarioId },
+          { listaItem: { lista: minhaLista(usuarioId) } },
+        ],
+      },
       orderBy: { data: 'desc' },
       select: { preco: true },
     });

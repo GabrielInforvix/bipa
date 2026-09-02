@@ -13,6 +13,7 @@ import '../../widget/cores.dart';
 import '../../widget/feedback.dart';
 import '../../widget/item_lista.dart';
 import '../../widget/pedir_conta.dart';
+import 'folha_compartilhar.dart';
 import 'folha_item.dart';
 
 /// Planejamento da lista — a tela usada em casa, sem pressa.
@@ -153,7 +154,11 @@ class _ListaPageState extends State<ListaPage> {
 
           return Column(
             children: [
-              _Cabecalho(lista: lista, aoExcluir: () => _excluir(lista)),
+              _Cabecalho(
+                lista: lista,
+                aoExcluir: () => _excluir(lista),
+                aoCompartilhar: () => _compartilhar(lista),
+              ),
               _CampoBusca(
                 controle: _busca,
                 aoDigitar: _aoDigitar,
@@ -193,6 +198,21 @@ class _ListaPageState extends State<ListaPage> {
     );
   }
 
+  Future<void> _compartilhar(ListaModel lista) async {
+    if (ParametrosGlobais.convidado) {
+      await pedirConta(
+        context,
+        recurso: 'Compartilhar a lista',
+        porque: 'O convite passa pelo servidor para chegar ao celular da '
+            'outra pessoa.',
+      );
+      return;
+    }
+    await FolhaCompartilhar.abrir(context, lista);
+    // Membros podem ter mudado (alguém removido, você saiu).
+    await _carregar();
+  }
+
   Future<void> _excluir(ListaModel lista) async {
     final ok = await confirmar(
       context,
@@ -211,8 +231,13 @@ class _ListaPageState extends State<ListaPage> {
 class _Cabecalho extends StatelessWidget {
   final ListaModel lista;
   final VoidCallback aoExcluir;
+  final VoidCallback aoCompartilhar;
 
-  const _Cabecalho({required this.lista, required this.aoExcluir});
+  const _Cabecalho({
+    required this.lista,
+    required this.aoExcluir,
+    required this.aoCompartilhar,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -235,12 +260,21 @@ class _Cabecalho extends StatelessWidget {
                       fontSize: 16, fontWeight: FontWeight.w700),
                 ),
                 Text(
-                  '${lista.itens.length} itens · estimado '
-                  '${lista.totais.totalEstimado.emReais}',
+                  [
+                    if (lista.rotuloPessoas != null) lista.rotuloPessoas!,
+                    '${lista.itens.length} itens',
+                    'estimado ${lista.totais.totalEstimado.emReais}',
+                  ].join(' · '),
                   style: const TextStyle(fontSize: 11.5, color: Cores.texto3),
                 ),
               ],
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.group_add_outlined,
+                size: 22, color: Cores.laranjaEscuro),
+            tooltip: 'Compartilhar',
+            onPressed: aoCompartilhar,
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, size: 22),
@@ -248,10 +282,16 @@ class _Cabecalho extends StatelessWidget {
               if (v == 'excluir') aoExcluir();
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'excluir',
-                child: Text('Excluir lista',
-                    style: TextStyle(color: Cores.carmim)),
+                child: Text(
+                  // Membro nao apaga a lista da familia: ele sai dela.
+                  lista.compartilhada &&
+                          lista.donoId != ParametrosGlobais.usuario?.id
+                      ? 'Sair da lista'
+                      : 'Excluir lista',
+                  style: const TextStyle(color: Cores.carmim),
+                ),
               ),
             ],
           ),
@@ -468,6 +508,8 @@ class _Itens extends StatelessWidget {
               child: LinhaItem(
                 item,
                 mostrarEstimado: true,
+                inicialOutro: lista.inicialDe(
+                    item.comprado ? item.compradoPorId : item.criadoPorId),
                 aoTocar: () => aoTocarItem(item),
               ),
             ),

@@ -5,8 +5,11 @@ import '../../controllers/listas_controller.dart';
 import '../../extensions/data_extension.dart';
 import '../../extensions/num_extension.dart';
 import '../../models/lista_model.dart';
+import '../../globais/parametros_globais.dart';
 import '../../widget/componentes.dart';
 import '../../widget/cores.dart';
+import '../../widget/pedir_conta.dart';
+import 'folha_entrar.dart';
 
 /// Todas as listas, separadas por estado.
 class ListasPage extends StatelessWidget {
@@ -49,9 +52,33 @@ class ListasPage extends StatelessWidget {
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
               children: [
-                const Text('Minhas listas',
-                    style:
-                        TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text('Minhas listas',
+                          style: TextStyle(
+                              fontSize: 22, fontWeight: FontWeight.w700)),
+                    ),
+                    // Entrada do convite: quem recebeu um código chega por aqui.
+                    TextButton.icon(
+                      onPressed: () => ParametrosGlobais.convidado
+                          ? pedirConta(
+                              context,
+                              recurso: 'Entrar numa lista',
+                              porque:
+                                  'A lista compartilhada mora no servidor, '
+                                  'junto das pessoas que participam dela.',
+                            )
+                          : FolhaEntrar.abrir(context),
+                      icon: const Icon(Icons.group_add_outlined, size: 18),
+                      label: const Text('Entrar com código',
+                          style: TextStyle(
+                              fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      style: TextButton.styleFrom(
+                          foregroundColor: Cores.laranjaEscuro),
+                    ),
+                  ],
+                ),
                 if (emCompra != null) ...[
                   const TituloCategoria('Em andamento'),
                   _Cartao(emCompra, destaque: true),
@@ -120,6 +147,7 @@ class _Cartao extends StatelessWidget {
             Text(
               [
                 (lista.finalizadaEm ?? lista.data).relativa,
+                if (lista.rotuloPessoas != null) lista.rotuloPessoas!,
                 if (lista.mercadoNome != null) lista.mercadoNome!,
                 '${lista.itens.length} itens',
               ].join(' · '),

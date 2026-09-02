@@ -130,6 +130,56 @@ class ApiService {
     );
   }
 
+  // ── Lista compartilhada ────────────────────────────────────────────
+  // Convite é operação de rede por natureza: envolve outra pessoa, do outro
+  // lado. Por isso vive aqui, e não no repositório offline.
+
+  Future<({String codigo, DateTime? expiraEm})> criarConvite(
+      String listaId) async {
+    final r =
+        await _client.post(Uri.parse('$_base/listas/$listaId/convites'));
+    if (!sucesso(r)) throw Exception(mensagemDeErro(r));
+    final d = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+    return (
+      codigo: d['codigo'] as String,
+      expiraEm: DateTime.tryParse(d['expiraEm']?.toString() ?? ''),
+    );
+  }
+
+  Future<void> revogarConvite(String listaId) async {
+    final r =
+        await _client.delete(Uri.parse('$_base/listas/$listaId/convites'));
+    if (!sucesso(r)) throw Exception(mensagemDeErro(r));
+  }
+
+  Future<({String nome, String dono, int itens})> previaConvite(
+      String codigo) async {
+    final r = await _client
+        .get(Uri.parse('$_base/convites/${Uri.encodeComponent(codigo)}'));
+    if (!sucesso(r)) throw Exception(mensagemDeErro(r));
+    final d = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+    final l = Map<String, dynamic>.from(d['lista'] as Map);
+    return (
+      nome: l['nome'] as String,
+      dono: l['dono'] as String,
+      itens: (l['itens'] as num).toInt(),
+    );
+  }
+
+  Future<String> aceitarConvite(String codigo) async {
+    final r = await _client.post(
+        Uri.parse('$_base/convites/${Uri.encodeComponent(codigo)}/aceitar'));
+    if (!sucesso(r)) throw Exception(mensagemDeErro(r));
+    final d = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+    return d['listaId'] as String;
+  }
+
+  Future<void> removerMembro(String listaId, String usuarioId) async {
+    final r = await _client
+        .delete(Uri.parse('$_base/listas/$listaId/membros/$usuarioId'));
+    if (!sucesso(r)) throw Exception(mensagemDeErro(r));
+  }
+
   Future<ResumoDashboard> resumo() async {
     final r = await _client.get(Uri.parse('$_base/dashboard/resumo'));
     if (!sucesso(r)) throw Exception(mensagemDeErro(r));

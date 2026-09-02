@@ -222,6 +222,9 @@ class RepositorioListas {
       quantidade: quantidade,
       precoUnitario: precoUnitario,
       total: total,
+      // Localmente, para a inicial aparecer já; o servidor confirma com o
+      // usuário da sincronização de qualquer forma.
+      compradoPorId: ParametrosGlobais.usuario?.id,
     );
     return _substituirItem(lista, atualizado, AcaoSync.atualizar);
   }

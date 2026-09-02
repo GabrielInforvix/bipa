@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { OrigemItem, StatusLista } from '@prisma/client';
+import { minhaLista } from '../comum/acesso';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Alimenta a tela de início: a compra em andamento e o resumo da última. */
@@ -10,16 +11,26 @@ export class DashboardService {
   async resumo(usuarioId: string) {
     const [emAndamento, ultima, totalListas] = await Promise.all([
       this.prisma.lista.findFirst({
-        where: { usuarioId, excluidoEm: null, status: StatusLista.EM_COMPRA },
+        where: {
+          excluidoEm: null,
+          status: StatusLista.EM_COMPRA,
+          AND: [minhaLista(usuarioId)],
+        },
         include: this.include(),
         orderBy: { atualizadoEm: 'desc' },
       }),
       this.prisma.lista.findFirst({
-        where: { usuarioId, excluidoEm: null, status: StatusLista.FINALIZADA },
+        where: {
+          excluidoEm: null,
+          status: StatusLista.FINALIZADA,
+          AND: [minhaLista(usuarioId)],
+        },
         include: this.include(),
         orderBy: { finalizadaEm: 'desc' },
       }),
-      this.prisma.lista.count({ where: { usuarioId, excluidoEm: null } }),
+      this.prisma.lista.count({
+        where: { excluidoEm: null, AND: [minhaLista(usuarioId)] },
+      }),
     ]);
 
     return {

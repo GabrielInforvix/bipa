@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mercado-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "api", "run", "start:dev"],
+      "port": 3010
+    },
+    {
+      "name": "mercado-web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "serve", "-l", "4310", "web/build/web"],
+      "port": 4310
+    }
+  ]
+}
